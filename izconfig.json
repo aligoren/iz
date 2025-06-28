@@ -1,0 +1,10 @@
+{
+    "commands": {
+        "run": "dotnet run",
+        "build": "dotnet build",
+        "test": "dotnet test",
+        "dev": "npm start",
+        "serve": "python -m http.server #{port}",
+        "echo": "echo 'Merhaba #{name}!'"
+    }
+} 
