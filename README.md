@@ -49,9 +49,17 @@ sudo cp target/release/iz /usr/local/bin/
 2. **Run commands against any commit**:
 
 ```bash
-iz 30b5302 run
-iz abc1234 build  
-iz HEAD~2 test
+iz run 30b5302 run
+iz run abc1234 build  
+iz run HEAD~2 test
+```
+
+3. **Clean up temporary directories**:
+
+```bash
+iz cleanup                    # Interactive cleanup
+iz cleanup --force            # Force cleanup without confirmation
+iz cleanup --temp-dir /custom # Clean specific directory
 ```
 
 ## Configuration
@@ -90,39 +98,55 @@ iz abc1234 greet --param name=Alice --param age=25
 
 ## Usage
 
-### Basic Commands
+### Run Commands
 
 ```bash
 # Basic usage
-iz <commit-id> <command>
+iz run <commit-id> <command>
 
 # Examples
-iz HEAD run
-iz 30b5302 build
-iz abc1234 test
+iz run HEAD run
+iz run 30b5302 build
+iz run abc1234 test
 ```
 
 ### With Parameters
 
 ```bash
 # Single parameter
-iz 30b5302 serve --param port=3000
+iz run 30b5302 serve --param port=3000
 
 # Multiple parameters  
-iz abc1234 greet --param name=Bob --param age=30
+iz run abc1234 greet --param name=Bob --param age=30
 ```
 
 ### Temporary Directory Control
 
 ```bash
 # Custom temporary directory
-iz 30b5302 run --temp-dir /tmp/my-test
+iz run 30b5302 run --temp-dir /tmp/my-test
 
 # Keep temporary directory after execution
-iz 30b5302 run --keep
+iz run 30b5302 run --keep
 
 # Both options
-iz 30b5302 run --temp-dir /tmp/my-test --keep
+iz run 30b5302 run --temp-dir /tmp/my-test --keep
+```
+
+### Cleanup Commands
+
+```bash
+# Interactive cleanup (asks for confirmation)
+iz cleanup
+
+# Force cleanup (no confirmation)
+iz cleanup --force
+
+# Clean specific temporary directory
+iz cleanup --temp-dir /custom/temp
+
+# Clean custom directory with force
+iz cleanup --temp-dir /tmp/my-iz-temp --force
 ```
 
 ## Configuration Priority
@@ -138,10 +162,10 @@ Settings are applied in this order (highest to lowest priority):
 
 ```bash
 # Environment variable
-IZTEMP=/tmp/iz-custom iz 30b5302 run
+IZTEMP=/tmp/iz-custom iz run 30b5302 run
 
 # CLI override (highest priority)
-iz 30b5302 run --temp-dir /tmp/override --keep
+iz run 30b5302 run --temp-dir /tmp/override --keep
 ```
 
 ## Signal Handling
@@ -170,7 +194,7 @@ cargo test --test integration_tests
 ### Test Coverage
 
 - **11 Unit Tests**: Core functionality (parsing, substitution, config)
-- **6 Integration Tests**: Real CLI scenarios  
+- **9 Integration Tests**: Real CLI scenarios including cleanup feature
 - **Error Handling**: Missing files, invalid parameters, command failures
 
 ## Project Structure
@@ -207,18 +231,16 @@ Output:
 ```
 CLI tool for testing Git commits in temporary directories
 
-Usage: iz [OPTIONS] <COMMIT_ID> <COMMAND>
+Usage: iz <COMMAND>
 
-Arguments:
-  <COMMIT_ID>  Git commit ID
-  <COMMAND>    Command to execute
+Commands:
+  run      Run a command in a temporary directory with files from a specific commit
+  cleanup  Clean up temporary directories created by iz
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
-      --keep                           Keep temporary directory after execution
-      --temp-dir <TEMP_DIR>           Temporary directory path (default: .iztemp)
-      --param <PARAM>                 Additional parameters (--key=value format)
-  -h, --help                          Print help
-  -V, --version                       Print version
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
 ## License

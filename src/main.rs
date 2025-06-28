@@ -21,46 +21,84 @@ static CLEANUP_STATE: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(Non
     version = "0.1.0"
 )]
 struct Cli {
-    /// Git commit ID
-    commit_id: String,
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    /// Command to execute
-    command: String,
+#[derive(Parser)]
+enum Commands {
+    /// Run a command in a temporary directory with files from a specific commit
+    Run {
+        /// Git commit ID
+        commit_id: String,
 
-    /// Keep temporary directory after execution
-    #[arg(long)]
-    keep: bool,
+        /// Command to execute
+        command: String,
 
-    /// Temporary directory path (default: .iztemp)
-    #[arg(long)]
-    temp_dir: Option<String>,
+        /// Keep temporary directory after execution
+        #[arg(long)]
+        keep: bool,
 
-    /// Additional parameters (--key=value format)
-    #[arg(long, value_parser = parse_key_val)]
-    param: Vec<(String, String)>,
+        /// Temporary directory path (default: .iztemp)
+        #[arg(long)]
+        temp_dir: Option<String>,
+
+        /// Additional parameters (--key=value format)
+        #[arg(long, value_parser = parse_key_val)]
+        param: Vec<(String, String)>,
+    },
+    /// Clean up temporary directories created by iz
+    Cleanup {
+        /// Temporary directory path to clean (default: from izconfig.json)
+        #[arg(long)]
+        temp_dir: Option<String>,
+
+        /// Force cleanup without confirmation
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    match cli.command {
+        Commands::Run {
+            commit_id,
+            command,
+            keep,
+            temp_dir,
+            param,
+        } => run_command(commit_id, command, keep, temp_dir, param).await,
+        Commands::Cleanup { temp_dir, force } => cleanup_command(temp_dir, force).await,
+    }
+}
+
+async fn run_command(
+    commit_id: String,
+    command: String,
+    keep: bool,
+    temp_dir: Option<String>,
+    param: Vec<(String, String)>,
+) -> Result<()> {
     println!("🔄 Starting iz CLI...");
 
     let config = read_config().context("Failed to read izconfig.json")?;
 
     let command_template = config
         .commands
-        .get(&cli.command)
-        .ok_or_else(|| anyhow::anyhow!("Command '{}' not found in izconfig.json", cli.command))?;
+        .get(&command)
+        .ok_or_else(|| anyhow::anyhow!("Command '{}' not found in izconfig.json", command))?;
 
-    let params: HashMap<String, String> = cli.param.into_iter().collect();
+    let params: HashMap<String, String> = param.into_iter().collect();
     let final_command = substitute_variables(command_template, &params)?;
 
-    println!("🎯 Commit: {}", cli.commit_id);
+    println!("🎯 Commit: {}", commit_id);
     println!("📝 Command: {final_command}");
 
-    let should_keep = cli.keep || config.keep.unwrap_or(false);
-    let base_temp_dir = determine_temp_dir(&cli.temp_dir, &config)?;
+    let should_keep = keep || config.keep.unwrap_or(false);
+    let base_temp_dir = determine_temp_dir(&temp_dir, &config)?;
     let temp_path = create_unique_temp_dir(&base_temp_dir)?;
 
     if !should_keep {
@@ -78,7 +116,7 @@ async fn main() -> Result<()> {
         None
     };
 
-    checkout_commit_to_temp(&cli.commit_id, &temp_path).context("Failed to checkout commit")?;
+    checkout_commit_to_temp(&commit_id, &temp_path).context("Failed to checkout commit")?;
 
     println!("🚀 Executing command...");
     execute_command(&final_command, &temp_path).context("Failed to execute command")?;
@@ -90,6 +128,94 @@ async fn main() -> Result<()> {
     }
 
     println!("✅ Operation completed!");
+    Ok(())
+}
+
+async fn cleanup_command(temp_dir: Option<String>, force: bool) -> Result<()> {
+    println!("🧹 Starting cleanup...");
+
+    let config = read_config().context("Failed to read izconfig.json")?;
+    let base_temp_dir = determine_temp_dir(&temp_dir, &config)?;
+
+    if !base_temp_dir.exists() {
+        println!(
+            "📁 Temporary directory does not exist: {}",
+            base_temp_dir.display()
+        );
+        return Ok(());
+    }
+
+    // List contents of temp directory
+    let entries = fs::read_dir(&base_temp_dir)
+        .with_context(|| format!("Failed to read temp directory: {}", base_temp_dir.display()))?;
+
+    let mut items_to_clean = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir()
+            && path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .starts_with("iz-")
+        {
+            items_to_clean.push(path);
+        }
+    }
+
+    if items_to_clean.is_empty() {
+        println!(
+            "✨ No temporary directories to clean in: {}",
+            base_temp_dir.display()
+        );
+        return Ok(());
+    }
+
+    println!("📋 Found {} temporary directories:", items_to_clean.len());
+    for item in &items_to_clean {
+        println!("  • {}", item.display());
+    }
+
+    if !force {
+        print!("❓ Do you want to clean these directories? [y/N]: ");
+        std::io::Write::flush(&mut std::io::stdout())?;
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim().to_lowercase();
+
+        if input != "y" && input != "yes" {
+            println!("🚫 Cleanup cancelled");
+            return Ok(());
+        }
+    }
+
+    let mut cleaned_count = 0;
+    let mut failed_count = 0;
+
+    for item in items_to_clean {
+        match fs::remove_dir_all(&item) {
+            Ok(()) => {
+                cleaned_count += 1;
+                println!("✅ Cleaned: {}", item.display());
+            }
+            Err(e) => {
+                failed_count += 1;
+                eprintln!("❌ Failed to clean {}: {}", item.display(), e);
+            }
+        }
+    }
+
+    if failed_count == 0 {
+        println!("🎉 Successfully cleaned {} directories!", cleaned_count);
+    } else {
+        println!(
+            "⚠️  Cleaned {} directories, {} failed",
+            cleaned_count, failed_count
+        );
+    }
+
     Ok(())
 }
 

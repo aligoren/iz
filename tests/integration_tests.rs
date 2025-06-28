@@ -90,7 +90,7 @@ fn test_iz_cli_basic_command() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["HEAD", "hello"])
+        .args(["run", "HEAD", "hello"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -113,7 +113,7 @@ fn test_iz_cli_with_parameters() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["HEAD", "greet", "--param", "name=Integration"])
+        .args(["run", "HEAD", "greet", "--param", "name=Integration"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -143,7 +143,7 @@ fn test_iz_cli_missing_config() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["HEAD", "test"])
+        .args(["run", "HEAD", "test"])
         .current_dir(&temp_dir)
         .output()
         .expect("Failed to run iz CLI");
@@ -161,7 +161,7 @@ fn test_iz_cli_missing_command() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["HEAD", "nonexistent"])
+        .args(["run", "HEAD", "nonexistent"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -195,7 +195,7 @@ fn test_iz_cli_missing_parameter() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["HEAD", "greet"])
+        .args(["run", "HEAD", "greet"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -204,4 +204,96 @@ fn test_iz_cli_missing_parameter() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Required parameter not found: name"));
+}
+
+#[test]
+fn test_iz_cli_cleanup_force() {
+    let temp_repo = create_test_git_repo_with_config(&[("test", "echo 'test'")]);
+    let iz_binary = get_iz_binary_path();
+
+    // Create fake temp directories
+    let temp_base = temp_repo.join(".iztemp");
+    fs::create_dir_all(&temp_base).unwrap();
+    fs::create_dir_all(temp_base.join("iz-test1")).unwrap();
+    fs::create_dir_all(temp_base.join("iz-test2")).unwrap();
+    fs::create_dir_all(temp_base.join("other-folder")).unwrap();
+
+    // Run cleanup with force
+    let output = Command::new(&iz_binary)
+        .args(["cleanup", "--force"])
+        .current_dir(&temp_repo)
+        .output()
+        .expect("Failed to run iz cleanup");
+
+    assert!(
+        output.status.success(),
+        "iz cleanup failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("🧹 Starting cleanup..."));
+    assert!(stdout.contains("Found 2 temporary directories"));
+    assert!(stdout.contains("Successfully cleaned 2 directories"));
+
+    // Verify only iz- prefixed directories were cleaned
+    assert!(!temp_base.join("iz-test1").exists());
+    assert!(!temp_base.join("iz-test2").exists());
+    assert!(temp_base.join("other-folder").exists());
+}
+
+#[test]
+fn test_iz_cli_cleanup_no_directories() {
+    let temp_repo = create_test_git_repo_with_config(&[("test", "echo 'test'")]);
+    let iz_binary = get_iz_binary_path();
+
+    // Create empty temp directory
+    let temp_base = temp_repo.join(".iztemp");
+    fs::create_dir_all(&temp_base).unwrap();
+
+    let output = Command::new(&iz_binary)
+        .args(["cleanup", "--force"])
+        .current_dir(&temp_repo)
+        .output()
+        .expect("Failed to run iz cleanup");
+
+    assert!(
+        output.status.success(),
+        "iz cleanup failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("No temporary directories to clean"));
+}
+
+#[test]
+fn test_iz_cli_cleanup_custom_temp_dir() {
+    let temp_repo = create_test_git_repo_with_config(&[("test", "echo 'test'")]);
+    let iz_binary = get_iz_binary_path();
+
+    // Create custom temp directory with iz- directories
+    let custom_temp = temp_repo.join("custom-temp");
+    fs::create_dir_all(&custom_temp).unwrap();
+    fs::create_dir_all(custom_temp.join("iz-custom1")).unwrap();
+    fs::create_dir_all(custom_temp.join("iz-custom2")).unwrap();
+
+    let output = Command::new(&iz_binary)
+        .args(["cleanup", "--force", "--temp-dir", "custom-temp"])
+        .current_dir(&temp_repo)
+        .output()
+        .expect("Failed to run iz cleanup");
+
+    assert!(
+        output.status.success(),
+        "iz cleanup failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Successfully cleaned 2 directories"));
+
+    // Verify directories were cleaned
+    assert!(!custom_temp.join("iz-custom1").exists());
+    assert!(!custom_temp.join("iz-custom2").exists());
 }
