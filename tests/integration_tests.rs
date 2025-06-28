@@ -9,19 +9,19 @@ fn create_test_git_repo_with_config(commands: &[(&str, &str)]) -> PathBuf {
     let repo_path = &temp_dir;
     
     Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(repo_path)
         .output()
         .expect("Git init failed");
     
     Command::new("git")
-        .args(&["config", "user.email", "test@example.com"])
+        .args(["config", "user.email", "test@example.com"])
         .current_dir(repo_path)
         .output()
         .expect("Git config email failed");
         
     Command::new("git")
-        .args(&["config", "user.name", "Test User"])
+        .args(["config", "user.name", "Test User"])
         .current_dir(repo_path)
         .output()
         .expect("Git config name failed");
@@ -39,13 +39,13 @@ fn create_test_git_repo_with_config(commands: &[(&str, &str)]) -> PathBuf {
     fs::write(repo_path.join("test.txt"), "Test content").unwrap();
     
     Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(repo_path)
         .output()
         .expect("Git add failed");
         
     Command::new("git")
-        .args(&["commit", "-m", "Test commit"])
+        .args(["commit", "-m", "Test commit"])
         .current_dir(repo_path)
         .output()
         .expect("Git commit failed");
@@ -87,7 +87,7 @@ fn test_iz_cli_basic_command() {
     let iz_binary = get_iz_binary_path();
     
     let output = Command::new(&iz_binary)
-        .args(&["HEAD", "hello"])
+        .args(["HEAD", "hello"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -108,7 +108,7 @@ fn test_iz_cli_with_parameters() {
     let iz_binary = get_iz_binary_path();
     
     let output = Command::new(&iz_binary)
-        .args(&["HEAD", "greet", "--param", "name=Integration"])
+        .args(["HEAD", "greet", "--param", "name=Integration"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -125,7 +125,7 @@ fn test_iz_cli_missing_config() {
     fs::create_dir_all(&temp_dir).unwrap();
     
     Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&temp_dir)
         .output()
         .expect("Git init failed");
@@ -133,7 +133,7 @@ fn test_iz_cli_missing_config() {
     let iz_binary = get_iz_binary_path();
     
     let output = Command::new(&iz_binary)
-        .args(&["HEAD", "test"])
+        .args(["HEAD", "test"])
         .current_dir(&temp_dir)
         .output()
         .expect("Failed to run iz CLI");
@@ -153,7 +153,7 @@ fn test_iz_cli_missing_command() {
     let iz_binary = get_iz_binary_path();
     
     let output = Command::new(&iz_binary)
-        .args(&["HEAD", "nonexistent"])
+        .args(["HEAD", "nonexistent"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -169,7 +169,7 @@ fn test_iz_cli_help() {
     let iz_binary = get_iz_binary_path();
     
     let output = Command::new(&iz_binary)
-        .args(&["--help"])
+        .args(["--help"])
         .output()
         .expect("Failed to run iz CLI help");
     
@@ -189,7 +189,7 @@ fn test_iz_cli_missing_parameter() {
     let iz_binary = get_iz_binary_path();
     
     let output = Command::new(&iz_binary)
-        .args(&["HEAD", "greet"])
+        .args(["HEAD", "greet"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");

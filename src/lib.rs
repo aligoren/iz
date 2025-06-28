@@ -14,7 +14,7 @@ pub struct IzConfig {
 
 pub fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let pos = s.find('=')
-        .ok_or_else(|| format!("Invalid KEY=value format: {}", s))?;
+        .ok_or_else(|| format!("Invalid KEY=value format: {s}"))?;
     Ok((s[..pos].to_string(), s[pos + 1..].to_string()))
 }
 
@@ -216,7 +216,7 @@ mod tests {
         let config = read_config_from_path(&config_path).unwrap();
         assert_eq!(config.commands.get("run").unwrap(), "dotnet run");
         assert_eq!(config.temp_dir.as_ref().unwrap(), "/tmp/iz-custom");
-        assert_eq!(config.keep.unwrap(), true);
+        assert!(config.keep.unwrap());
         
         // Cleanup
         let _ = fs::remove_dir_all(&temp_dir);

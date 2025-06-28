@@ -202,12 +202,10 @@ fn cleanup_temp_directory(temp_path: &PathBuf, should_keep: bool) {
     
     if should_keep {
         println!("💾 Temporary directory preserved: {}", temp_path.display());
+    } else if let Err(e) = fs::remove_dir_all(temp_path) {
+        eprintln!("⚠️  Error cleaning temporary directory: {}", e);
     } else {
-        if let Err(e) = fs::remove_dir_all(temp_path) {
-            eprintln!("⚠️  Error cleaning temporary directory: {}", e);
-        } else {
-            println!("🧹 Temporary directory cleaned");
-        }
+        println!("🧹 Temporary directory cleaned");
     }
 }
 
