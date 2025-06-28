@@ -57,13 +57,16 @@ fn get_iz_binary_path() -> String {
     use std::env;
 
     let current_dir = env::current_dir().expect("Failed to get current directory");
+    
+    // Cross-platform executable name (adds .exe on Windows)
+    let binary_name = format!("iz{}", std::env::consts::EXE_SUFFIX);
 
-    let debug_path = current_dir.join("target/debug/iz");
+    let debug_path = current_dir.join("target/debug").join(&binary_name);
     if debug_path.exists() {
         return debug_path.to_string_lossy().to_string();
     }
 
-    let release_path = current_dir.join("target/release/iz");
+    let release_path = current_dir.join("target/release").join(&binary_name);
     if release_path.exists() {
         return release_path.to_string_lossy().to_string();
     }
