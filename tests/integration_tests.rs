@@ -27,7 +27,7 @@ fn create_test_git_repo_with_config(commands: &[(&str, &str)]) -> PathBuf {
         .expect("Git config name failed");
     let mut config_content = String::from("{\n  \"commands\": {\n");
     for (i, (key, value)) in commands.iter().enumerate() {
-        config_content.push_str(&format!("    \"{}\": \"{}\"", key, value));
+        config_content.push_str(&format!("    \"{key}\": \"{value}\""));
         if i < commands.len() - 1 {
             config_content.push(',');
         }
