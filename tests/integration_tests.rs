@@ -56,6 +56,13 @@ fn create_test_git_repo_with_config(commands: &[(&str, &str)]) -> PathBuf {
 fn get_iz_binary_path() -> String {
     use std::env;
 
+    // First check if cargo test provides the binary path
+    if let Ok(binary_path) = env::var("CARGO_BIN_EXE_iz") {
+        if Path::new(&binary_path).exists() {
+            return binary_path;
+        }
+    }
+
     let current_dir = env::current_dir().expect("Failed to get current directory");
 
     // Cross-platform executable name (adds .exe on Windows)
@@ -69,12 +76,6 @@ fn get_iz_binary_path() -> String {
     let release_path = current_dir.join("target/release").join(&binary_name);
     if release_path.exists() {
         return release_path.to_string_lossy().to_string();
-    }
-
-    if let Ok(binary_path) = env::var("CARGO_BIN_EXE_iz") {
-        if Path::new(&binary_path).exists() {
-            return binary_path;
-        }
     }
 
     panic!("iz CLI binary not found. Run 'cargo build' first.");
