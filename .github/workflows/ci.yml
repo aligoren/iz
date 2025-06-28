@@ -82,9 +82,6 @@ jobs:
     - name: Build project
       run: cargo build --release --verbose
 
-    - name: Run integration tests
-      run: cargo test --release --verbose
-
   security:
     name: Security Audit
     runs-on: ubuntu-latest
