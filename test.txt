@@ -1,7 +1,0 @@
-Bu bir test dosyasıdır.
-İz CLI'nin çalışıp çalışmadığını test etmek için oluşturuldu.
-
-Test komutları:
-- echo komutu
-- ls komutu
-- cat komutu 

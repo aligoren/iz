@@ -1,156 +1,133 @@
 use clap::Parser;
 use std::collections::HashMap;
 use std::process::Command;
+use std::path::PathBuf;
+use std::fs;
 use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
-use tempfile::TempDir;
 use git2::Repository;
-use regex::Regex;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+use tokio::signal;
+
+use iz::{parse_key_val, substitute_variables, read_config};
+
+static CLEANUP_STATE: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
 
 #[derive(Parser)]
 #[command(
     name = "iz",
-    about = "Git commit'lerini geçici klasörde test etmek için CLI aracı",
+    about = "CLI tool for testing Git commits in temporary directories",
     version = "0.1.0"
 )]
 struct Cli {
-    /// Git commit ID'si
+    /// Git commit ID
     commit_id: String,
     
-    /// Çalıştırılacak komut
+    /// Command to execute
     command: String,
     
-    /// Geçici klasörü sakla
+    /// Keep temporary directory after execution
     #[arg(long)]
     keep: bool,
     
-    /// Ek parametreler (--key=value formatında)
+    /// Temporary directory path (default: .iztemp)
+    #[arg(long)]
+    temp_dir: Option<String>,
+    
+    /// Additional parameters (--key=value format)
     #[arg(long, value_parser = parse_key_val)]
     param: Vec<(String, String)>,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-struct IzConfig {
-    commands: HashMap<String, String>,
-}
-
-fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let pos = s.find('=')
-        .ok_or_else(|| format!("Geçersiz KEY=value formatı: {}", s))?;
-    Ok((s[..pos].to_string(), s[pos + 1..].to_string()))
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     
-    println!("🔄 İz CLI başlatılıyor...");
+    println!("🔄 Starting iz CLI...");
     
-    // izconfig.json dosyasını oku
-    let config = read_config().context("izconfig.json dosyası okunamadı")?;
+    let config = read_config().context("Failed to read izconfig.json")?;
     
-    // Komutun var olup olmadığını kontrol et
     let command_template = config.commands.get(&cli.command)
-        .ok_or_else(|| anyhow::anyhow!("'{}' komutu izconfig.json'da bulunamadı", cli.command))?;
+        .ok_or_else(|| anyhow::anyhow!("Command '{}' not found in izconfig.json", cli.command))?;
     
-    // Parametreleri HashMap'e çevir
     let params: HashMap<String, String> = cli.param.into_iter().collect();
-    
-    // Komutu parametrelerle doldur
     let final_command = substitute_variables(command_template, &params)?;
     
     println!("🎯 Commit: {}", cli.commit_id);
-    println!("📝 Komut: {}", final_command);
+    println!("📝 Command: {}", final_command);
     
-    // Geçici klasör oluştur
-    let temp_dir = TempDir::new().context("Geçici klasör oluşturulamadı")?;
-    let temp_path = temp_dir.path();
+    let should_keep = cli.keep || config.keep.unwrap_or(false);
+    let base_temp_dir = determine_temp_dir(&cli.temp_dir, &config)?;
+    let temp_path = create_unique_temp_dir(&base_temp_dir)?;
     
-    println!("📁 Geçici klasör: {}", temp_path.display());
-    
-    // Git işlemleri
-    checkout_commit_to_temp(&cli.commit_id, temp_path).context("Commit çıkarılamadı")?;
-    
-    // Komutu çalıştır
-    println!("🚀 Komut çalıştırılıyor...");
-    execute_command(&final_command, temp_path).context("Komut çalıştırılamadı")?;
-    
-    if cli.keep {
-        println!("💾 Geçici klasör saklandı: {}", temp_path.display());
-        // TempDir'i drop etmeden çıkış yap
-        std::mem::forget(temp_dir);
-    } else {
-        println!("🧹 Geçici klasör temizlendi");
+    if !should_keep {
+        let mut cleanup_state = CLEANUP_STATE.lock().unwrap();
+        *cleanup_state = Some(temp_path.clone());
     }
     
-    println!("✅ İşlem tamamlandı!");
+    println!("📁 Temporary directory: {}", temp_path.display());
+    
+    let signal_handle = if !should_keep {
+        Some(tokio::spawn(async {
+            let _ = setup_signal_handler().await;
+        }))
+    } else {
+        None
+    };
+    
+    checkout_commit_to_temp(&cli.commit_id, &temp_path).context("Failed to checkout commit")?;
+    
+    println!("🚀 Executing command...");
+    execute_command(&final_command, &temp_path).context("Failed to execute command")?;
+    
+    cleanup_temp_directory(&temp_path, should_keep);
+    
+    if let Some(handle) = signal_handle {
+        handle.abort();
+    }
+    
+    println!("✅ Operation completed!");
     Ok(())
 }
 
-fn read_config() -> Result<IzConfig> {
-    let config_path = "izconfig.json";
-    
-    if !std::path::Path::new(config_path).exists() {
-        return Err(anyhow::anyhow!("izconfig.json dosyası bulunamadı. Örnek içerik:\n{}", 
-            serde_json::to_string_pretty(&IzConfig {
-                commands: {
-                    let mut map = HashMap::new();
-                    map.insert("run".to_string(), "dotnet run".to_string());
-                    map.insert("build".to_string(), "dotnet build".to_string());
-                    map.insert("test".to_string(), "dotnet test".to_string());
-                    map
-                }
-            })?));
-    }
-    
-    let content = std::fs::read_to_string(config_path)
-        .context("izconfig.json dosyası okunamadı")?;
-    
-    let config: IzConfig = serde_json::from_str(&content)
-        .context("izconfig.json dosyası parse edilemedi")?;
-    
-    Ok(config)
-}
-
-fn substitute_variables(template: &str, params: &HashMap<String, String>) -> Result<String> {
-    let re = Regex::new(r"#\{(\w+)\}").unwrap();
-    let mut result = template.to_string();
-    
-    for caps in re.captures_iter(template) {
-        let var_name = &caps[1];
-        let full_match = &caps[0];
-        
-        if let Some(value) = params.get(var_name) {
-            result = result.replace(full_match, value);
-        } else {
-            return Err(anyhow::anyhow!("Gerekli parametre bulunamadı: {}", var_name));
-        }
-    }
-    
-    Ok(result)
-}
-
 fn checkout_commit_to_temp(commit_id: &str, temp_path: &std::path::Path) -> Result<()> {
-    // Mevcut Git repository'yi aç
-    let repo = Repository::open(".").context("Git repository bulunamadı")?;
+    let repo = Repository::open(std::env::current_dir()?)
+        .context("Git repository not found - this directory is not a git repository")?;
     
-    // Commit'i bul
-    let oid = git2::Oid::from_str(commit_id)
-        .context("Geçersiz commit ID")?;
+    let object = repo.revparse_single(commit_id)
+        .context("Commit not found - invalid commit ID")?;
     
-    let commit = repo.find_commit(oid)
-        .context("Commit bulunamadı")?;
+    let commit = object.peel_to_commit()
+        .context("Given reference does not point to a commit")?;
     
     let tree = commit.tree()
-        .context("Commit tree'si alınamadı")?;
+        .context("Failed to get commit tree")?;
     
-    // Dosyaları geçici klasöre çıkar
+    // Pre-create directory structure to avoid git2 checkout issues
+    create_directory_structure(&tree, temp_path)
+        .context("Failed to create directory structure")?;
+    
     let mut checkout_builder = git2::build::CheckoutBuilder::new();
     checkout_builder.target_dir(temp_path);
     checkout_builder.force();
+    checkout_builder.recreate_missing(true);
     
     repo.checkout_tree(tree.as_object(), Some(&mut checkout_builder))
-        .context("Dosyalar çıkarılamadı")?;
+        .context("Failed to extract files")?;
+    
+    Ok(())
+}
+
+fn create_directory_structure(tree: &git2::Tree, base_path: &std::path::Path) -> Result<()> {
+    tree.walk(git2::TreeWalkMode::PreOrder, |root, entry| {
+        if let Some(git2::ObjectType::Tree) = entry.kind() {
+            let dir_path = base_path.join(root).join(entry.name().unwrap_or(""));
+            if let Err(e) = fs::create_dir_all(&dir_path) {
+                eprintln!("Warning: Failed to create directory {}: {}", dir_path.display(), e);
+            }
+        }
+        git2::TreeWalkResult::Ok
+    })?;
     
     Ok(())
 }
@@ -158,7 +135,7 @@ fn checkout_commit_to_temp(commit_id: &str, temp_path: &std::path::Path) -> Resu
 fn execute_command(command: &str, working_dir: &std::path::Path) -> Result<()> {
     let parts: Vec<&str> = command.split_whitespace().collect();
     if parts.is_empty() {
-        return Err(anyhow::anyhow!("Boş komut"));
+        return Err(anyhow::anyhow!("Empty command"));
     }
     
     let mut cmd = Command::new(parts[0]);
@@ -169,21 +146,108 @@ fn execute_command(command: &str, working_dir: &std::path::Path) -> Result<()> {
     cmd.current_dir(working_dir);
     
     let output = cmd.output()
-        .context("Komut çalıştırılamadı")?;
+        .context("Failed to execute command")?;
     
     if !output.stdout.is_empty() {
-        println!("📄 Çıktı:");
+        println!("📄 Output:");
         println!("{}", String::from_utf8_lossy(&output.stdout));
     }
     
     if !output.stderr.is_empty() {
-        eprintln!("⚠️  Hata çıktısı:");
+        eprintln!("⚠️  Error output:");
         eprintln!("{}", String::from_utf8_lossy(&output.stderr));
     }
     
     if !output.status.success() {
-        return Err(anyhow::anyhow!("Komut başarısız oldu: {}", output.status));
+        return Err(anyhow::anyhow!("Command failed with status: {}", output.status));
     }
     
     Ok(())
+}
+
+async fn setup_signal_handler() -> Result<()> {
+    let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())?;
+    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
+    
+    tokio::select! {
+        _ = sigint.recv() => {
+            println!("\n🛑 Received SIGINT (Ctrl+C)");
+            perform_cleanup();
+            std::process::exit(130);
+        }
+        _ = sigterm.recv() => {
+            println!("\n🛑 Received SIGTERM");
+            perform_cleanup();
+            std::process::exit(143);
+        }
+    }
+}
+
+fn perform_cleanup() {
+    if let Ok(mut cleanup_state) = CLEANUP_STATE.lock() {
+        if let Some(temp_path) = cleanup_state.take() {
+            if let Err(e) = fs::remove_dir_all(&temp_path) {
+                eprintln!("⚠️  Error during signal cleanup: {}", e);
+            } else {
+                println!("🧹 Temporary directory cleaned up: {}", temp_path.display());
+            }
+        }
+    }
+}
+
+fn cleanup_temp_directory(temp_path: &PathBuf, should_keep: bool) {
+    if let Ok(mut cleanup_state) = CLEANUP_STATE.lock() {
+        *cleanup_state = None;
+    }
+    
+    if should_keep {
+        println!("💾 Temporary directory preserved: {}", temp_path.display());
+    } else {
+        if let Err(e) = fs::remove_dir_all(temp_path) {
+            eprintln!("⚠️  Error cleaning temporary directory: {}", e);
+        } else {
+            println!("🧹 Temporary directory cleaned");
+        }
+    }
+}
+
+fn determine_temp_dir(cli_temp_dir: &Option<String>, config: &iz::IzConfig) -> Result<PathBuf> {
+    if let Some(temp_dir) = cli_temp_dir {
+        return Ok(PathBuf::from(temp_dir));
+    }
+    
+    if let Ok(env_temp_dir) = std::env::var("IZTEMP") {
+        return Ok(PathBuf::from(env_temp_dir));
+    }
+    
+    if let Some(config_temp_dir) = &config.temp_dir {
+        return Ok(PathBuf::from(config_temp_dir));
+    }
+    
+    let current_dir = std::env::current_dir()
+        .context("Failed to get current directory")?;
+    
+    Ok(current_dir.join(".iztemp"))
+}
+
+fn create_unique_temp_dir(base_temp_dir: &PathBuf) -> Result<PathBuf> {
+    if !base_temp_dir.exists() {
+        fs::create_dir_all(base_temp_dir)
+            .with_context(|| format!("Failed to create temp directory: {}", base_temp_dir.display()))?;
+    }
+    
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    
+    let random_id: u32 = rand::random();
+    let unique_name = format!("iz-{}-{:x}", timestamp, random_id);
+    
+    let temp_path = base_temp_dir.join(unique_name);
+    
+    fs::create_dir_all(&temp_path)
+        .with_context(|| format!("Failed to create temporary directory: {}", temp_path.display()))?;
+    
+    Ok(temp_path)
 }

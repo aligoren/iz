@@ -1,112 +1,234 @@
-# İz CLI 🚀
+# iz CLI 🚀
 
-Git commit'lerini geçici klasörde test etmek için güçlü bir CLI aracı.
+A powerful CLI tool for testing Git commits in temporary directories without changing your active branch.
 
-## Nedir?
+## What is it?
 
-`iz`, geçmiş commit'lerinizi aktif branch'inizi değiştirmeden test etmenizi sağlar. Herhangi bir commit'in dosyalarını geçici bir klasöre çıkarır, istediğiniz komutu o klasörde çalıştırır ve işlem bitince klasörü temizler.
+`iz` allows you to test your past commits safely. It extracts files from any commit to a temporary directory, runs your desired command in that directory, and cleans up automatically when finished (unless you specify otherwise).
 
-## Kurulum
+## Features
+
+- ✅ **Safe testing** - Never changes your active branch
+- ✅ **Flexible temporary directories** - Configure via CLI, environment, or config file
+- ✅ **Variable substitution** - Use `#{variable}` syntax in commands
+- ✅ **Signal handling** - Proper cleanup on Ctrl+C interruption
+- ✅ **Keep option** - Preserve temporary directories for inspection
+- ✅ **Cross-platform** - Works on Windows, macOS, Linux
+- ✅ **Comprehensive testing** - Unit and integration tests included
+
+## Installation
 
 ```bash
+# Build the project
 cargo build --release
-# Binary dosyası target/release/iz konumunda oluşur
+
+# Copy to system PATH (optional)
+sudo cp target/release/iz /usr/local/bin/
+
+# Or use directly
+./target/release/iz --help
 ```
 
-## Kullanım
+## Quick Start
 
-### Temel Kullanım
+1. **Create configuration file** in your project root:
 
-```bash
-iz <commit-id> <komut>
+```json
+{
+    "commands": {
+        "run": "dotnet run",
+        "build": "dotnet build", 
+        "test": "dotnet test",
+        "serve": "python -m http.server #{port}"
+    },
+    "temp_dir": ".iztemp",
+    "keep": false
+}
 ```
 
-### Örnekler
+2. **Run commands against any commit**:
 
 ```bash
-# Belirli bir commit'te dotnet run çalıştır
 iz 30b5302 run
-
-# Build komutunu çalıştır
-iz abc1234 build
-
-# Test komutunu çalıştır
-iz def5678 test
+iz abc1234 build  
+iz HEAD~2 test
 ```
 
-### Parametreli Komutlar
+## Configuration
 
-```bash
-# Port parametresi ile çalıştır
-iz 30b5302 serve --param port=8080
-
-# Birden fazla parametre
-iz 30b5302 echo --param name=Ali --param surname=Veli
-```
-
-### Geçici Klasörü Saklamak
-
-```bash
-# --keep bayrağı ile geçici klasör silinmez
-iz 30b5302 run --keep
-```
-
-## Konfigürasyon
-
-Projenizin kök dizininde `izconfig.json` dosyası oluşturun:
+### izconfig.json Format
 
 ```json
 {
     "commands": {
         "run": "dotnet run",
         "build": "dotnet build",
-        "test": "dotnet test",
-        "dev": "npm start",
+        "test": "dotnet test", 
         "serve": "python -m http.server #{port}",
-        "echo": "echo 'Merhaba #{name}!'"
-    }
+        "greet": "echo 'Hello #{name}, you are #{age} years old!'"
+    },
+    "temp_dir": ".iztemp",  
+    "keep": false
 }
 ```
 
-### Değişken Desteği
+### Configuration Fields
 
-Komutlarınızda `#{değişken}` formatında değişkenler kullanabilirsiniz:
+- **`commands`** (required): Command definitions with variable support
+- **`temp_dir`** (optional): Base temporary directory path
+- **`keep`** (optional): Whether to preserve temporary directories
 
-```json
-{
-    "commands": {
-        "serve": "python -m http.server #{port}",
-        "greet": "echo 'Merhaba #{name} #{surname}!'"
-    }
-}
-```
+### Variable Substitution
 
-Bu değişkenleri `--param` ile geçebilirsiniz:
+Use `#{variable}` syntax in commands:
 
 ```bash
-iz 30b5302 serve --param port=3000
-iz 30b5302 greet --param name=Ali --param surname=Veli
+# With variables
+iz 30b5302 serve --param port=8080
+iz abc1234 greet --param name=Alice --param age=25
 ```
 
-## Avantajları
+## Usage
 
-- ✅ Aktif branch'inizi değiştirmez
-- ✅ Commit geçmişinizi güvenle test edebilirsiniz  
-- ✅ Geçici klasörler otomatik temizlenir
-- ✅ Değişken desteği ile esnek komutlar
-- ✅ Basit JSON konfigürasyonu
-- ✅ Cross-platform (Windows, macOS, Linux)
+### Basic Commands
 
-## Gereksinimler
+```bash
+# Basic usage
+iz <commit-id> <command>
 
-- Rust (derleme için)
-- Git repository (çalışacağınız projede)
-- izconfig.json dosyası
+# Examples
+iz HEAD run
+iz 30b5302 build
+iz abc1234 test
+```
 
-## Lisans
+### With Parameters
+
+```bash
+# Single parameter
+iz 30b5302 serve --param port=3000
+
+# Multiple parameters  
+iz abc1234 greet --param name=Bob --param age=30
+```
+
+### Temporary Directory Control
+
+```bash
+# Custom temporary directory
+iz 30b5302 run --temp-dir /tmp/my-test
+
+# Keep temporary directory after execution
+iz 30b5302 run --keep
+
+# Both options
+iz 30b5302 run --temp-dir /tmp/my-test --keep
+```
+
+## Configuration Priority
+
+Settings are applied in this order (highest to lowest priority):
+
+1. **CLI parameters**: `--temp-dir`, `--keep`
+2. **Environment variables**: `IZTEMP`
+3. **Config file**: `temp_dir`, `keep` in `izconfig.json`
+4. **Defaults**: `.iztemp` directory, `keep=false`
+
+### Examples
+
+```bash
+# Environment variable
+IZTEMP=/tmp/iz-custom iz 30b5302 run
+
+# CLI override (highest priority)
+iz 30b5302 run --temp-dir /tmp/override --keep
+```
+
+## Signal Handling
+
+iz CLI properly handles interruption signals:
+
+- **Ctrl+C (SIGINT)**: Gracefully stops and cleans up temporary directory
+- **SIGTERM**: Also triggers cleanup and exit
+- **Automatic cleanup**: Only when `keep=false` (default)
+
+## Testing
+
+### Run Tests
+
+```bash
+# All tests
+cargo test
+
+# Unit tests only
+cargo test --lib
+
+# Integration tests only  
+cargo test --test integration_tests
+```
+
+### Test Coverage
+
+- **11 Unit Tests**: Core functionality (parsing, substitution, config)
+- **6 Integration Tests**: Real CLI scenarios  
+- **Error Handling**: Missing files, invalid parameters, command failures
+
+## Project Structure
+
+```
+iz/
+├── src/
+│   ├── main.rs                   # Main CLI application
+│   └── lib.rs                    # Core functions + unit tests
+├── tests/
+│   └── integration_tests.rs      # Integration tests
+├── .gitignore                    # Git ignore rules
+├── Cargo.toml                    # Rust dependencies
+├── Cargo.lock                    # Dependency lock file
+├── README.md                     # This file
+└── target/                       # Build artifacts
+    ├── debug/iz                  # Debug binary
+    └── release/iz                # Optimized binary
+```
+
+## Requirements
+
+- **Rust** (1.70+ recommended)
+- **Git repository** (for the project you want to test)
+- **izconfig.json** file in your project root
+
+## Help
+
+```bash
+iz --help
+```
+
+Output:
+```
+CLI tool for testing Git commits in temporary directories
+
+Usage: iz [OPTIONS] <COMMIT_ID> <COMMAND>
+
+Arguments:
+  <COMMIT_ID>  Git commit ID
+  <COMMAND>    Command to execute
+
+Options:
+      --keep                           Keep temporary directory after execution
+      --temp-dir <TEMP_DIR>           Temporary directory path (default: .iztemp)
+      --param <PARAM>                 Additional parameters (--key=value format)
+  -h, --help                          Print help
+  -V, --version                       Print version
+```
+
+## License
 
 MIT
 
-## Katkıda Bulunma
+## Contributing
 
-Pull request'ler ve issue'lar memnuniyetle karşılanır! 
+Contributions are welcome! Please feel free to submit pull requests or open issues.
+
+---
+
+**Happy testing!** 🎯 
