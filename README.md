@@ -49,9 +49,9 @@ sudo cp target/release/iz /usr/local/bin/
 2. **Run commands against any commit**:
 
 ```bash
-iz run 30b5302 run
-iz run abc1234 build  
-iz run HEAD~2 test
+iz 30b5302 run
+iz abc1234 build  
+iz HEAD~2 test
 ```
 
 3. **Clean up temporary directories**:
@@ -102,35 +102,35 @@ iz abc1234 greet --param name=Alice --param age=25
 
 ```bash
 # Basic usage
-iz run <commit-id> <command>
+iz <commit-id> <command>
 
 # Examples
-iz run HEAD run
-iz run 30b5302 build
-iz run abc1234 test
+iz HEAD run
+iz 30b5302 build
+iz abc1234 test
 ```
 
 ### With Parameters
 
 ```bash
 # Single parameter
-iz run 30b5302 serve --param port=3000
+iz 30b5302 serve --param port=3000
 
 # Multiple parameters  
-iz run abc1234 greet --param name=Bob --param age=30
+iz abc1234 greet --param name=Bob --param age=30
 ```
 
 ### Temporary Directory Control
 
 ```bash
 # Custom temporary directory
-iz run 30b5302 run --temp-dir /tmp/my-test
+iz 30b5302 run --temp-dir /tmp/my-test
 
 # Keep temporary directory after execution
-iz run 30b5302 run --keep
+iz 30b5302 run --keep
 
 # Both options
-iz run 30b5302 run --temp-dir /tmp/my-test --keep
+iz 30b5302 run --temp-dir /tmp/my-test --keep
 ```
 
 ### Clean Commands
@@ -162,10 +162,10 @@ Settings are applied in this order (highest to lowest priority):
 
 ```bash
 # Environment variable
-IZTEMP=/tmp/iz-custom iz run 30b5302 run
+IZTEMP=/tmp/iz-custom iz 30b5302 run
 
 # CLI override (highest priority)
-iz run 30b5302 run --temp-dir /tmp/override --keep
+iz 30b5302 run --temp-dir /tmp/override --keep
 ```
 
 ## Signal Handling
@@ -231,16 +231,19 @@ Output:
 ```
 CLI tool for testing Git commits in temporary directories
 
-Usage: iz <COMMAND>
+Usage: iz [OPTIONS] <COMMIT_ID_OR_COMMAND> [COMMAND]
 
-Commands:
-  run      Run a command in a temporary directory with files from a specific commit
-  cleanup  Clean up temporary directories created by iz
-  help     Print this message or the help of the given subcommand(s)
+Arguments:
+  <COMMIT_ID_OR_COMMAND>  Git commit ID or 'clean' command
+  [COMMAND]               Command to execute (not needed for 'clean')
 
 Options:
-  -h, --help     Print help
-  -V, --version  Print version
+      --keep                 Keep temporary directory after execution
+      --temp-dir <TEMP_DIR>  Temporary directory path (default: .iztemp)
+      --param <PARAM>        Additional parameters (--key=value format)
+      --force                Force operation without confirmation (for clean command)
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 ## License
