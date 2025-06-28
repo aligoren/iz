@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     let final_command = substitute_variables(command_template, &params)?;
     
     println!("🎯 Commit: {}", cli.commit_id);
-    println!("📝 Command: {}", final_command);
+    println!("📝 Command: {final_command}");
     
     let should_keep = cli.keep || config.keep.unwrap_or(false);
     let base_temp_dir = determine_temp_dir(&cli.temp_dir, &config)?;
@@ -187,7 +187,7 @@ fn perform_cleanup() {
     if let Ok(mut cleanup_state) = CLEANUP_STATE.lock() {
         if let Some(temp_path) = cleanup_state.take() {
             if let Err(e) = fs::remove_dir_all(&temp_path) {
-                eprintln!("⚠️  Error during signal cleanup: {}", e);
+                eprintln!("⚠️  Error during signal cleanup: {e}");
             } else {
                 println!("🧹 Temporary directory cleaned up: {}", temp_path.display());
             }
@@ -203,7 +203,7 @@ fn cleanup_temp_directory(temp_path: &PathBuf, should_keep: bool) {
     if should_keep {
         println!("💾 Temporary directory preserved: {}", temp_path.display());
     } else if let Err(e) = fs::remove_dir_all(temp_path) {
-        eprintln!("⚠️  Error cleaning temporary directory: {}", e);
+        eprintln!("⚠️  Error cleaning temporary directory: {e}");
     } else {
         println!("🧹 Temporary directory cleaned");
     }
@@ -240,7 +240,7 @@ fn create_unique_temp_dir(base_temp_dir: &PathBuf) -> Result<PathBuf> {
         .as_millis();
     
     let random_id: u32 = rand::random();
-    let unique_name = format!("iz-{}-{:x}", timestamp, random_id);
+    let unique_name = format!("iz-{timestamp}-{random_id:x}");
     
     let temp_path = base_temp_dir.join(unique_name);
     
