@@ -57,9 +57,9 @@ iz run HEAD~2 test
 3. **Clean up temporary directories**:
 
 ```bash
-iz cleanup                    # Interactive cleanup
-iz cleanup --force            # Force cleanup without confirmation
-iz cleanup --temp-dir /custom # Clean specific directory
+iz clean                      # Interactive cleanup
+iz clean --force              # Force cleanup without confirmation
+iz clean --temp-dir /custom   # Clean specific directory
 ```
 
 ## Configuration
@@ -133,20 +133,20 @@ iz run 30b5302 run --keep
 iz run 30b5302 run --temp-dir /tmp/my-test --keep
 ```
 
-### Cleanup Commands
+### Clean Commands
 
 ```bash
 # Interactive cleanup (asks for confirmation)
-iz cleanup
+iz clean
 
 # Force cleanup (no confirmation)
-iz cleanup --force
+iz clean --force
 
 # Clean specific temporary directory
-iz cleanup --temp-dir /custom/temp
+iz clean --temp-dir /custom/temp
 
 # Clean custom directory with force
-iz cleanup --temp-dir /tmp/my-iz-temp --force
+iz clean --temp-dir /tmp/my-iz-temp --force
 ```
 
 ## Configuration Priority
@@ -194,7 +194,7 @@ cargo test --test integration_tests
 ### Test Coverage
 
 - **11 Unit Tests**: Core functionality (parsing, substitution, config)
-- **9 Integration Tests**: Real CLI scenarios including cleanup feature
+- **9 Integration Tests**: Real CLI scenarios including clean feature
 - **Error Handling**: Missing files, invalid parameters, command failures
 
 ## Project Structure

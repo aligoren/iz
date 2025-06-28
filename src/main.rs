@@ -21,58 +21,45 @@ static CLEANUP_STATE: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(Non
     version = "0.1.0"
 )]
 struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
+    /// Git commit ID or 'clean' command
+    commit_id_or_command: String,
 
-#[derive(Parser)]
-enum Commands {
-    /// Run a command in a temporary directory with files from a specific commit
-    Run {
-        /// Git commit ID
-        commit_id: String,
+    /// Command to execute (not needed for 'clean')
+    command: Option<String>,
 
-        /// Command to execute
-        command: String,
+    /// Keep temporary directory after execution
+    #[arg(long)]
+    keep: bool,
 
-        /// Keep temporary directory after execution
-        #[arg(long)]
-        keep: bool,
+    /// Temporary directory path (default: .iztemp)
+    #[arg(long)]
+    temp_dir: Option<String>,
 
-        /// Temporary directory path (default: .iztemp)
-        #[arg(long)]
-        temp_dir: Option<String>,
+    /// Additional parameters (--key=value format)
+    #[arg(long, value_parser = parse_key_val)]
+    param: Vec<(String, String)>,
 
-        /// Additional parameters (--key=value format)
-        #[arg(long, value_parser = parse_key_val)]
-        param: Vec<(String, String)>,
-    },
-    /// Clean up temporary directories created by iz
-    Cleanup {
-        /// Temporary directory path to clean (default: from izconfig.json)
-        #[arg(long)]
-        temp_dir: Option<String>,
-
-        /// Force cleanup without confirmation
-        #[arg(long)]
-        force: bool,
-    },
+    /// Force operation without confirmation (for clean command)
+    #[arg(long)]
+    force: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
-        Commands::Run {
-            commit_id,
-            command,
-            keep,
-            temp_dir,
-            param,
-        } => run_command(commit_id, command, keep, temp_dir, param).await,
-        Commands::Cleanup { temp_dir, force } => cleanup_command(temp_dir, force).await,
+    // Check if first argument is "clean" command
+    if cli.commit_id_or_command == "clean" {
+        return clean_command(cli.temp_dir, cli.force).await;
     }
+
+    // Original behavior for commit ID + command
+    let commit_id = cli.commit_id_or_command;
+    let command = cli.command.ok_or_else(|| {
+        anyhow::anyhow!("Command is required. Usage: iz <commit-id> <command> or iz clean")
+    })?;
+
+    run_command(commit_id, command, cli.keep, cli.temp_dir, cli.param).await
 }
 
 async fn run_command(
@@ -131,7 +118,7 @@ async fn run_command(
     Ok(())
 }
 
-async fn cleanup_command(temp_dir: Option<String>, force: bool) -> Result<()> {
+async fn clean_command(temp_dir: Option<String>, force: bool) -> Result<()> {
     println!("🧹 Starting cleanup...");
 
     let config = read_config().context("Failed to read izconfig.json")?;

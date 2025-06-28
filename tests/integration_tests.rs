@@ -90,7 +90,7 @@ fn test_iz_cli_basic_command() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["run", "HEAD", "hello"])
+        .args(["HEAD", "hello"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -113,7 +113,7 @@ fn test_iz_cli_with_parameters() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["run", "HEAD", "greet", "--param", "name=Integration"])
+        .args(["HEAD", "greet", "--param", "name=Integration"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -143,7 +143,7 @@ fn test_iz_cli_missing_config() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["run", "HEAD", "test"])
+        .args(["HEAD", "test"])
         .current_dir(&temp_dir)
         .output()
         .expect("Failed to run iz CLI");
@@ -161,7 +161,7 @@ fn test_iz_cli_missing_command() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["run", "HEAD", "nonexistent"])
+        .args(["HEAD", "nonexistent"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -195,7 +195,7 @@ fn test_iz_cli_missing_parameter() {
     let iz_binary = get_iz_binary_path();
 
     let output = Command::new(&iz_binary)
-        .args(["run", "HEAD", "greet"])
+        .args(["HEAD", "greet"])
         .current_dir(&temp_repo)
         .output()
         .expect("Failed to run iz CLI");
@@ -207,7 +207,7 @@ fn test_iz_cli_missing_parameter() {
 }
 
 #[test]
-fn test_iz_cli_cleanup_force() {
+fn test_iz_cli_clean_force() {
     let temp_repo = create_test_git_repo_with_config(&[("test", "echo 'test'")]);
     let iz_binary = get_iz_binary_path();
 
@@ -220,14 +220,14 @@ fn test_iz_cli_cleanup_force() {
 
     // Run cleanup with force
     let output = Command::new(&iz_binary)
-        .args(["cleanup", "--force"])
+        .args(["clean", "--force"])
         .current_dir(&temp_repo)
         .output()
-        .expect("Failed to run iz cleanup");
+        .expect("Failed to run iz clean");
 
     assert!(
         output.status.success(),
-        "iz cleanup failed: {}",
+        "iz clean failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -243,7 +243,7 @@ fn test_iz_cli_cleanup_force() {
 }
 
 #[test]
-fn test_iz_cli_cleanup_no_directories() {
+fn test_iz_cli_clean_no_directories() {
     let temp_repo = create_test_git_repo_with_config(&[("test", "echo 'test'")]);
     let iz_binary = get_iz_binary_path();
 
@@ -252,14 +252,14 @@ fn test_iz_cli_cleanup_no_directories() {
     fs::create_dir_all(&temp_base).unwrap();
 
     let output = Command::new(&iz_binary)
-        .args(["cleanup", "--force"])
+        .args(["clean", "--force"])
         .current_dir(&temp_repo)
         .output()
-        .expect("Failed to run iz cleanup");
+        .expect("Failed to run iz clean");
 
     assert!(
         output.status.success(),
-        "iz cleanup failed: {}",
+        "iz clean failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -268,7 +268,7 @@ fn test_iz_cli_cleanup_no_directories() {
 }
 
 #[test]
-fn test_iz_cli_cleanup_custom_temp_dir() {
+fn test_iz_cli_clean_custom_temp_dir() {
     let temp_repo = create_test_git_repo_with_config(&[("test", "echo 'test'")]);
     let iz_binary = get_iz_binary_path();
 
@@ -279,14 +279,14 @@ fn test_iz_cli_cleanup_custom_temp_dir() {
     fs::create_dir_all(custom_temp.join("iz-custom2")).unwrap();
 
     let output = Command::new(&iz_binary)
-        .args(["cleanup", "--force", "--temp-dir", "custom-temp"])
+        .args(["clean", "--force", "--temp-dir", "custom-temp"])
         .current_dir(&temp_repo)
         .output()
-        .expect("Failed to run iz cleanup");
+        .expect("Failed to run iz clean");
 
     assert!(
         output.status.success(),
-        "iz cleanup failed: {}",
+        "iz clean failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
