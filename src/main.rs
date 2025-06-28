@@ -7,6 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
+#[cfg(unix)]
 use tokio::signal;
 
 use iz::{parse_key_val, read_config, substitute_variables};
@@ -173,6 +174,7 @@ fn execute_command(command: &str, working_dir: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 async fn setup_signal_handler() -> Result<()> {
     let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())?;
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
@@ -189,6 +191,14 @@ async fn setup_signal_handler() -> Result<()> {
             std::process::exit(143);
         }
     }
+}
+
+#[cfg(windows)]
+async fn setup_signal_handler() -> Result<()> {
+    tokio::signal::ctrl_c().await?;
+    println!("\n🛑 Received Ctrl+C");
+    perform_cleanup();
+    std::process::exit(130);
 }
 
 fn perform_cleanup() {
