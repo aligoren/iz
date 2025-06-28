@@ -57,7 +57,7 @@ fn get_iz_binary_path() -> String {
     use std::env;
 
     let current_dir = env::current_dir().expect("Failed to get current directory");
-    
+
     // Cross-platform executable name (adds .exe on Windows)
     let binary_name = format!("iz{}", std::env::consts::EXE_SUFFIX);
 
