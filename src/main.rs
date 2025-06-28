@@ -81,7 +81,7 @@ async fn run_command(
     let params: HashMap<String, String> = param.into_iter().collect();
     let final_command = substitute_variables(command_template, &params)?;
 
-    println!("🎯 Commit: {}", commit_id);
+    println!("🎯 Commit: {commit_id}");
     println!("📝 Command: {final_command}");
 
     let should_keep = keep || config.keep.unwrap_or(false);
@@ -195,12 +195,9 @@ async fn clean_command(temp_dir: Option<String>, force: bool) -> Result<()> {
     }
 
     if failed_count == 0 {
-        println!("🎉 Successfully cleaned {} directories!", cleaned_count);
+        println!("🎉 Successfully cleaned {cleaned_count} directories!");
     } else {
-        println!(
-            "⚠️  Cleaned {} directories, {} failed",
-            cleaned_count, failed_count
-        );
+        println!("⚠️  Cleaned {cleaned_count} directories, {failed_count} failed");
     }
 
     Ok(())
